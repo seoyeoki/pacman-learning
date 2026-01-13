@@ -6,7 +6,7 @@ import random
 SCREEN_WIDTH, SCREEN_HEIGHT = 600, 600
 GRID_SIZE = 20
 CELL_SIZE = SCREEN_WIDTH // GRID_SIZE
-FPS = 30
+FPS = 60 # 학습 속도를 위해 프레임 제한을 조금 높였습니다
 
 BLACK = (0, 0, 0)
 BLUE = (0, 0, 255)      # 벽
@@ -28,8 +28,11 @@ DY = [0, 1, 0, -1]
 
 class PacmanEnv:
     def __init__(self):
-        self.screen = None
-        self.clock = None
+        # [수정됨] 시작하자마자 PyGame 시스템과 화면을 초기화합니다.
+        pygame.init()
+        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        pygame.display.set_caption("Pacman RL Simulator")
+        self.clock = pygame.time.Clock()
 
         # 맵 레이아웃 (1:벽, 0:길)
         self.map_layout = np.array([
@@ -117,13 +120,8 @@ class PacmanEnv:
         return obs_grid
 
     def render(self):
-        """화면 그리기 (렌더링 필요 시에만 초기화)"""
-        if self.screen is None:
-            pygame.init()
-            self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-            pygame.display.set_caption("Pacman RL Simulator")
-            self.clock = pygame.time.Clock()
-
+        """화면 그리기"""
+        # 초기화 코드는 __init__으로 이동했으므로 여기선 그리기만 합니다.
         self.screen.fill(BLACK)
         current_view = self._get_observation()
 
@@ -141,9 +139,8 @@ class PacmanEnv:
                     pygame.draw.rect(self.screen, RED, (c*CELL_SIZE+4, r*CELL_SIZE+4, CELL_SIZE-8, CELL_SIZE-8))
 
         pygame.display.flip()
+        # FPS 조절은 렌더링 할 때만 합니다.
         self.clock.tick(FPS)
 
     def close(self):
-        if self.screen is not None:
-            pygame.quit()
-            self.screen = None
+        pygame.quit()

@@ -1,52 +1,49 @@
-# main.py 라고 가정
-from pacman_env import PacmanEnv
+import sys
 import random
 import time
+from pacman_env import PacmanEnv  # 우리가 만든 파일 불러오기
 
-# --- 1. 랜덤 모델 (바보 에이전트) ---
-def random_model(observation):
-    return random.choice([0, 1, 2, 3])
+def run_game():
+    # 1. 환경 생성
+    env = PacmanEnv()
 
-# --- 2. 규칙 기반 모델 (하드코딩된 지능) ---
-def rule_based_model(observation):
-    # observation이 [상, 우, 하, 좌] 센서값이라고 가정 (mode='sensor')
-    # 예: 위에 유령이 있으면(1), 아래(2)로 도망가라
-    if observation[0] == 1: return 2
-    if observation[1] == 1: return 3
-    if observation[2] == 1: return 0
-    if observation[3] == 1: return 1
-    return random.choice([0, 1, 2, 3]) # 위험 없으면 랜덤
+    # 2. 에피소드 반복 (학습 Loop)
+    episodes = 5
 
-# --- 3. 실행기 (Controller) ---
-def run_simulation(model_func, mode='sensor'):
-    env = PacmanEnv(mode=mode)
-    obs = env.reset()
-    total_reward = 0
+    for episode in range(1, episodes + 1):
+        state = env.reset()
+        done = False
+        total_reward = 0
 
-    print(f"--- Simulation Start with {model_func.__name__} ---")
+        print(f"--- Episode {episode} Start ---")
 
-    running = True
-    while running:
-        # [핵심] 시뮬레이터가 준 데이터(obs)를 모델에 넣고, 행동(action)을 받음
-        action = model_func(obs)
+        while not done:
+            # ----------------------------------------
+            # [Model Area] 나중에 여기에 AI 모델이 들어갑니다.
+            # 지금은 랜덤으로 아무 방향이나 선택합니다.
+            action = random.choice([0, 1, 2, 3])
+            # ----------------------------------------
 
-        # 행동을 시뮬레이터에 입력
-        obs, reward, done, info = env.step(action)
-        total_reward += reward
+            # 환경에 행동 입력
+            next_state, reward, done, info = env.step(action)
 
-        env.render()
+            total_reward += reward
+            state = next_state
 
-        if done:
-            print(f"Game Over! Total Score: {total_reward}")
-            running = False
-            time.sleep(1) # 결과 확인 대기
+            # 화면 표시
+            env.render()
+
+            # 게임 종료 이벤트 처리 (창 닫기 등)
+            import pygame
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    env.close()
+                    sys.exit()
+
+        print(f"Episode {episode} Finished. Total Score: {total_reward}")
+        time.sleep(0.5) # 결과 확인용 잠시 대기
 
     env.close()
 
-# --- 실행 ---
 if __name__ == "__main__":
-    # 1. 랜덤 모델 테스트
-    run_simulation(random_model, mode='sensor')
-
-    # 2. 규칙 기반 모델 테스트 (조금 더 오래 살 것입니다)
-    # run_simulation(rule_based_model, mode='sensor')
+    run_game()
