@@ -1,146 +1,80 @@
-import pygame
 import numpy as np
-import random
+import pygame  # 이벤트 처리를 위해 추가
+import torch
 
-# --- 상수 및 색상 정의 ---
-SCREEN_WIDTH, SCREEN_HEIGHT = 600, 600
-GRID_SIZE = 20
-CELL_SIZE = SCREEN_WIDTH // GRID_SIZE
-FPS = 60 # 학습 속도를 위해 프레임 제한을 조금 높였습니다
+from pacman_env import PacmanEnv
+from dqn_agent import DQNAgent
 
-BLACK = (0, 0, 0)
-BLUE = (0, 0, 255)      # 벽
-YELLOW = (255, 255, 0)  # 팩맨
-RED = (255, 0, 0)       # 유령
-WHITE = (255, 255, 255) # 코인
+def flatten_state(grid):
+    """20x20 그리드를 1차원(400,) 배열로 변환"""
+    return grid.flatten()
 
-# 그리드 객체 코드
-EMPTY = 0
-WALL = 1
-PACMAN = 2
-GHOST = 3
-COIN = 4
+def main():
+    env = PacmanEnv()
 
-# 행동 정의
-UP, RIGHT, DOWN, LEFT = 0, 1, 2, 3
-DX = [-1, 0, 1, 0]
-DY = [0, 1, 0, -1]
+    # 입력 크기: 20x20 = 400, 행동 크기: 4 (상하좌우)
+    state_size = 20 * 20
+    action_size = 4
 
-class PacmanEnv:
-    def __init__(self):
-        # [수정됨] 시작하자마자 PyGame 시스템과 화면을 초기화합니다.
-        pygame.init()
-        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        pygame.display.set_caption("Pacman RL Simulator")
-        self.clock = pygame.time.Clock()
+    agent = DQNAgent(state_size, action_size)
 
-        # 맵 레이아웃 (1:벽, 0:길)
-        self.map_layout = np.array([
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [1, 2, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 3, 0, 1],
-            [1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
-            [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
-            [1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1],
-            [1, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-        ])
+    EPISODES = 500  # 총 학습 횟수
 
-        self.base_grid = np.ones((GRID_SIZE, GRID_SIZE), dtype=int) * WALL
-        r, c = self.map_layout.shape
-        self.base_grid[:r, :c] = self.map_layout
+    print("--- DQN Training Start ---")
 
-        self.reset()
+    for e in range(EPISODES):
+        # 환경 초기화
+        grid_state = env.reset()
+        state = flatten_state(grid_state)
 
-    def reset(self):
-        """게임 재시작 및 맵 초기화"""
-        self.grid = self.base_grid.copy()
-
-        pos = np.where(self.grid == PACMAN)
-        self.pacman_pos = [pos[0][0], pos[1][0]]
-        self.grid[self.pacman_pos[0], self.pacman_pos[1]] = EMPTY
-
-        g_idx = np.where(self.grid == GHOST)
-        self.ghosts = [[g_idx[0][i], g_idx[1][i]] for i in range(len(g_idx[0]))]
-        for gr, gc in self.ghosts:
-            self.grid[gr, gc] = EMPTY
-
-        self.coins = []
-        for r in range(GRID_SIZE):
-            for c in range(GRID_SIZE):
-                if self.grid[r, c] == 0:
-                    self.grid[r, c] = COIN
-                    self.coins.append([r, c])
-
-        self.step_count = 0
-        return self._get_observation()
-
-    def step(self, action):
-        """행동 수행 및 결과 반환"""
-        self.step_count += 1
-        reward = -1  # 시간 페널티
         done = False
+        total_reward = 0
+        step_count = 0
 
-        # 팩맨 이동
-        r, c = self.pacman_pos
-        nr, nc = r + DX[action], c + DY[action]
+        while not done:
+            # -----------------------------------------------------------
+            # [수정된 부분] 윈도우 응답 없음 방지를 위한 이벤트 처리 루프
+            # -----------------------------------------------------------
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    env.close()
+                    return # 프로그램 즉시 종료
+            # -----------------------------------------------------------
 
-        if 0 <= nr < GRID_SIZE and 0 <= nc < GRID_SIZE and self.grid[nr, nc] != WALL:
-            self.pacman_pos = [nr, nc]
-            if self.grid[nr, nc] == COIN:
-                reward += 10
-                self.grid[nr, nc] = EMPTY
-                self.coins.remove([nr, nc])
-                if len(self.coins) == 0:
-                    reward += 50
-                    done = True
+            # 1. 행동 선택
+            action = agent.get_action(state)
 
-        # 유령 이동 (랜덤)
-        for i, ghost in enumerate(self.ghosts):
-            gr, gc = ghost
-            moves = []
-            for d in range(4):
-                ngr, ngc = gr + DX[d], gc + DY[d]
-                if 0 <= ngr < GRID_SIZE and 0 <= ngc < GRID_SIZE and self.grid[ngr, ngc] != WALL:
-                    moves.append([ngr, ngc])
-            if moves:
-                self.ghosts[i] = random.choice(moves)
+            # 2. 환경 진행
+            next_grid_state, reward, done, _ = env.step(action)
+            next_state = flatten_state(next_grid_state)
 
-        if self.pacman_pos in self.ghosts:
-            reward = -100
-            done = True
+            # 3. 기억 저장
+            agent.remember(state, action, reward, next_state, done)
 
-        return self._get_observation(), reward, done, {}
+            # 4. 학습 (경험 리플레이)
+            agent.train_step()
 
-    def _get_observation(self):
-        """20x20 그리드 상태 반환"""
-        obs_grid = self.grid.copy()
-        obs_grid[self.pacman_pos[0], self.pacman_pos[1]] = PACMAN
-        for gr, gc in self.ghosts:
-            obs_grid[gr, gc] = GHOST
-        return obs_grid
+            state = next_state
+            total_reward += reward
+            step_count += 1
 
-    def render(self):
-        """화면 그리기"""
-        # 초기화 코드는 __init__으로 이동했으므로 여기선 그리기만 합니다.
-        self.screen.fill(BLACK)
-        current_view = self._get_observation()
+            # 화면 그리기 조건
+            # 'e % 10 == 0'이면 10판마다 한 번만 보여줍니다. (학습 속도 향상)
+            # 매번 보고 싶으면 아래 조건을 'if True:'로 바꾸세요.
+            if e % 10 == 0:
+                env.render()
 
-        for r in range(GRID_SIZE):
-            for c in range(GRID_SIZE):
-                val = current_view[r, c]
-                rect = (c*CELL_SIZE, r*CELL_SIZE, CELL_SIZE, CELL_SIZE)
-                if val == WALL:
-                    pygame.draw.rect(self.screen, BLUE, rect)
-                elif val == COIN:
-                    pygame.draw.circle(self.screen, WHITE, (c*CELL_SIZE+CELL_SIZE//2, r*CELL_SIZE+CELL_SIZE//2), 4)
-                elif val == PACMAN:
-                    pygame.draw.circle(self.screen, YELLOW, (c*CELL_SIZE+CELL_SIZE//2, r*CELL_SIZE+CELL_SIZE//2), CELL_SIZE//2 - 2)
-                elif val == GHOST:
-                    pygame.draw.rect(self.screen, RED, (c*CELL_SIZE+4, r*CELL_SIZE+4, CELL_SIZE-8, CELL_SIZE-8))
+        # 에피소드 종료 후 엡실론(탐험률) 감소
+        agent.update_epsilon()
 
-        pygame.display.flip()
-        # FPS 조절은 렌더링 할 때만 합니다.
-        self.clock.tick(FPS)
+        print(f"Episode {e+1}/{EPISODES} | Score: {total_reward} | Steps: {step_count} | Epsilon: {agent.epsilon:.2f}")
 
-    def close(self):
-        pygame.quit()
+    # 학습 완료 후 리소스 정리
+    env.close()
+    print("Training Finished.")
+
+    # 모델 저장 (선택 사항)
+    torch.save(agent.model.state_dict(), "pacman_dqn.pth")
+
+if __name__ == "__main__":
+    main()
