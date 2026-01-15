@@ -12,7 +12,7 @@ GAMMA = 0.99
 MEMORY_SIZE = 10000
 EPSILON_START = 1.0
 EPSILON_END = 0.01
-EPSILON_DECAY = 0.995
+EPSILON_DECAY = 0.999
 
 # GPU 사용 가능 여부 확인
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

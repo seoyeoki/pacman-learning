@@ -18,7 +18,7 @@ def main():
 
     agent = DQNAgent(state_size, action_size)
 
-    EPISODES = 500  # 총 학습 횟수
+    EPISODES = 5000  # 총 학습 횟수
 
     print("--- DQN Training Start ---")
 
@@ -61,7 +61,7 @@ def main():
             # 화면 그리기 조건
             # 'e % 10 == 0'이면 10판마다 한 번만 보여줍니다. (학습 속도 향상)
             # 매번 보고 싶으면 아래 조건을 'if True:'로 바꾸세요.
-            if e % 10 == 0:
+            if e % 100 == 0:
                 env.render()
 
         # 에피소드 종료 후 엡실론(탐험률) 감소

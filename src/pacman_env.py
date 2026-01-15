@@ -28,13 +28,12 @@ DY = [0, 1, 0, -1]
 
 class PacmanEnv:
     def __init__(self):
-        # [핵심 수정] 클래스 생성 시점에 바로 Pygame을 초기화합니다.
         pygame.init()
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         pygame.display.set_caption("Pacman RL Simulator")
         self.clock = pygame.time.Clock()
 
-        # 맵 레이아웃 (1:벽, 0:길)
+        # 맵 레이아웃 (1:벽, 0:길) - 20x20 크기에 맞게 나머지 공간은 벽으로 채워짐
         self.map_layout = np.array([
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
             [1, 2, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 3, 0, 1],
@@ -49,21 +48,27 @@ class PacmanEnv:
         r, c = self.map_layout.shape
         self.base_grid[:r, :c] = self.map_layout
 
+        self.max_steps = 1000  # 강제 종료 리미트
+        self.current_step = 0
+
         self.reset()
 
     def reset(self):
         """게임 재시작 및 맵 초기화"""
         self.grid = self.base_grid.copy()
 
+        # 팩맨 위치 초기화
         pos = np.where(self.grid == PACMAN)
         self.pacman_pos = [pos[0][0], pos[1][0]]
         self.grid[self.pacman_pos[0], self.pacman_pos[1]] = EMPTY
 
+        # 유령 위치 초기화
         g_idx = np.where(self.grid == GHOST)
         self.ghosts = [[g_idx[0][i], g_idx[1][i]] for i in range(len(g_idx[0]))]
         for gr, gc in self.ghosts:
             self.grid[gr, gc] = EMPTY
 
+        # 코인 배치
         self.coins = []
         for r in range(GRID_SIZE):
             for c in range(GRID_SIZE):
@@ -71,27 +76,33 @@ class PacmanEnv:
                     self.grid[r, c] = COIN
                     self.coins.append([r, c])
 
-        self.step_count = 0
+        self.current_step = 0
+
+        # [수정 1] self.state는 정의된 적이 없습니다. 현재 상태를 계산해서 반환해야 합니다.
         return self._get_observation()
 
     def step(self, action):
         """행동 수행 및 결과 반환"""
-        self.step_count += 1
-        reward = -1  # 시간 페널티
+        self.current_step += 1
+        reward = 0  # [방법 A 적용] 이동 감점 0 (숨만 쉬어도 나가는 돈 없음)
         done = False
 
-        # 팩맨 이동
+        # 팩맨 이동 로직
         r, c = self.pacman_pos
         nr, nc = r + DX[action], c + DY[action]
 
         if 0 <= nr < GRID_SIZE and 0 <= nc < GRID_SIZE and self.grid[nr, nc] != WALL:
             self.pacman_pos = [nr, nc]
+
+            # [방법 A 적용] 코인 점수 +20 (이득!)
             if self.grid[nr, nc] == COIN:
-                reward += 10
+                reward += 20
                 self.grid[nr, nc] = EMPTY
                 self.coins.remove([nr, nc])
+
+                # 모든 코인 다 먹음
                 if len(self.coins) == 0:
-                    reward += 50
+                    reward += 50  # 클리어 보너스
                     done = True
 
         # 유령 이동 (랜덤)
@@ -105,11 +116,23 @@ class PacmanEnv:
             if moves:
                 self.ghosts[i] = random.choice(moves)
 
+        # 유령 충돌 체크
         if self.pacman_pos in self.ghosts:
-            reward = -100
+            reward = -100  # [방법 A 적용] 죽으면 큰 손해
             done = True
 
-        return self._get_observation(), reward, done, {}
+        # 최대 턴수 초과 체크
+        if self.current_step >= self.max_steps:
+            done = True
+
+        # [수정 2] 다음 상태(next_state)를 계산해야 합니다.
+        next_state = self._get_observation()
+
+        # [수정 3] info 딕셔너리가 없으면 에러 날 수 있음
+        info = {'step': self.current_step}
+
+        # [수정 4] 정의된 변수들을 리턴합니다.
+        return next_state, reward, done, info
 
     def _get_observation(self):
         """20x20 그리드 상태 반환"""
@@ -121,7 +144,6 @@ class PacmanEnv:
 
     def render(self):
         """화면 그리기"""
-        # 초기화 코드는 __init__으로 이동했으므로 여기선 그리기만 합니다.
         self.screen.fill(BLACK)
         current_view = self._get_observation()
 
@@ -132,6 +154,7 @@ class PacmanEnv:
                 if val == WALL:
                     pygame.draw.rect(self.screen, BLUE, rect)
                 elif val == COIN:
+                    # 코인 그리기
                     pygame.draw.circle(self.screen, WHITE, (c*CELL_SIZE+CELL_SIZE//2, r*CELL_SIZE+CELL_SIZE//2), 4)
                 elif val == PACMAN:
                     pygame.draw.circle(self.screen, YELLOW, (c*CELL_SIZE+CELL_SIZE//2, r*CELL_SIZE+CELL_SIZE//2), CELL_SIZE//2 - 2)
