@@ -5,14 +5,18 @@ import numpy as np
 import random
 from collections import deque
 
-# --- 하이퍼파라미터 ---
-BATCH_SIZE = 64
-LR = 0.001
-GAMMA = 0.99
-MEMORY_SIZE = 10000
-EPSILON_START = 1.0
-EPSILON_END = 0.01
-EPSILON_DECAY = 0.995 # 5000판 기준이면 0.999 추천, 500판이면 0.995
+
+# --- 매개변수 ---
+
+BATCH_SIZE = 64         # 한 번에 학습할 데이터 양 (RTX 4060이므로 128도 가능)
+LR = 0.0005             # 학습률 (0.001은 가끔 너무 튀어서, 조금 더 안정적인 0.0005 추천)
+GAMMA = 0.99            # 할인율 (미래 보상을 얼마나 중요하게 볼지, 0.99가 국룰)
+MEMORY_SIZE = 10000     # 리플레이 버퍼 크기 (최근 1만 개의 경험만 기억)
+
+# 탐험(Exploration) 관련 설정
+EPSILON_START = 1.0     # 100% 랜덤으로 시작
+EPSILON_END = 0.01      # 최소 1%는 계속 탐험하게 둠
+EPSILON_DECAY = 0.999   # 감소 속도 (이 값이 클수록 천천히 줄어듦)
 
 # GPU 사용 가능 여부 확인
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

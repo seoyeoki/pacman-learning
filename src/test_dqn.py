@@ -36,12 +36,15 @@ def run_test(mode='trained'):
             return
     else:
         print("\n=== 🎲 랜덤 팩맨(Before) 시작... ===")
+        # 아무것도 로드하지 않음 (초기화된 상태 = 바보)
 
     grid_state = env.reset()
     state = get_one_hot_state(grid_state) # [변경] 원-핫
     done = False
     total_reward = 0
     step = 0
+
+    print(f"--- {mode.upper()} 모드 시작 (Ctrl+C로 종료) ---")
 
     while not done:
         for event in pygame.event.get():
@@ -50,8 +53,10 @@ def run_test(mode='trained'):
                 return
 
         if mode == 'random':
+            # 완전 랜덤 행동
             action = random.choice([0, 1, 2, 3])
         else:
+            # AI 행동
             action = agent.get_action(state)
 
         next_grid_state, reward, done, _ = env.step(action)
@@ -60,12 +65,19 @@ def run_test(mode='trained'):
         step += 1
 
         env.render()
-        time.sleep(0.05) # 관전하기 좋은 속도
+        time.sleep(0.03) # 관전 속도 (너무 느리면 0.01로 줄이세요)
 
-    print(f"[{mode.upper()}] 게임 종료! 점수: {total_reward:.2f}, 생존: {step}")
-    time.sleep(1)
+    print(f"[{mode.upper()}] 게임 종료! 점수: {total_reward:.2f}, 생존: {step} 스텝")
+    time.sleep(1) # 결과 확인용 대기
     env.close()
 
 if __name__ == "__main__":
-    # 학습된 모델 테스트
+    # 1. 랜덤 팩맨 (바보) 먼저 실행
+    run_test(mode='random')
+
+    # 잠시 대기
+    print("\n... 3초 뒤 학습된 AI가 시작됩니다 ...")
+    time.sleep(3)
+
+    # 2. 학습된 AI (천재?) 실행
     run_test(mode='trained')

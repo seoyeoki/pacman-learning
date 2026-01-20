@@ -29,7 +29,7 @@ def main():
 
     agent = DQNAgent(state_size, action_size)
 
-    EPISODES = 500  # 테스트용 500판 (원하면 3000~5000 추천)
+    EPISODES = 5000
 
     print("--- DQN Training Start (One-Hot + Target Network) ---")
 
