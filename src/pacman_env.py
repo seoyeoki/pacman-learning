@@ -82,56 +82,60 @@ class PacmanEnv:
         return self._get_observation()
 
     def step(self, action):
-        """행동 수행 및 결과 반환"""
         self.current_step += 1
-        reward = 0  # [방법 A 적용] 이동 감점 0 (숨만 쉬어도 나가는 돈 없음)
+
+        # [추천 1] 시간 페널티: 작지만 확실하게 (-0.05)
+        reward = -0.05
         done = False
 
-        # 팩맨 이동 로직
         r, c = self.pacman_pos
         nr, nc = r + DX[action], c + DY[action]
 
-        if 0 <= nr < GRID_SIZE and 0 <= nc < GRID_SIZE and self.grid[nr, nc] != WALL:
+        # [추천 2] 벽 충돌 페널티: 이동보다 더 아프게 (-1.0)
+        if not (0 <= nr < GRID_SIZE and 0 <= nc < GRID_SIZE) or self.grid[nr, nc] == WALL:
+            reward = -1.0
+            # 위치 이동 없음 (제자리)
+        else:
             self.pacman_pos = [nr, nc]
 
-            # [방법 A 적용] 코인 점수 +20 (이득!)
+            # [추천 3] 코인 보상 (+10)
             if self.grid[nr, nc] == COIN:
-                reward += 20
+                reward += 10.0
                 self.grid[nr, nc] = EMPTY
                 self.coins.remove([nr, nc])
 
-                # 모든 코인 다 먹음
+                # [추천 4] 클리어 보너스 (+50)
                 if len(self.coins) == 0:
-                    reward += 50  # 클리어 보너스
+                    reward += 50.0
                     done = True
 
-        # 유령 이동 (랜덤)
+        # 3. 유령 이동
         for i, ghost in enumerate(self.ghosts):
             gr, gc = ghost
             moves = []
+
+            # 유령도 상하좌우 중 벽이 아닌 곳을 찾음
             for d in range(4):
                 ngr, ngc = gr + DX[d], gc + DY[d]
                 if 0 <= ngr < GRID_SIZE and 0 <= ngc < GRID_SIZE and self.grid[ngr, ngc] != WALL:
                     moves.append([ngr, ngc])
+
+            # 갈 곳이 있으면 랜덤하게 하나 골라서 이동
             if moves:
                 self.ghosts[i] = random.choice(moves)
 
-        # 유령 충돌 체크
+        # [추천 5] 사망 페널티: 회복 불가능한 수준 (-100)
         if self.pacman_pos in self.ghosts:
-            reward = -100  # [방법 A 적용] 죽으면 큰 손해
+            reward = -100.0
             done = True
 
-        # 최대 턴수 초과 체크
+        # 시간 초과 (보통 점수 변화 없음 혹은 사망 처리)
         if self.current_step >= self.max_steps:
             done = True
 
-        # [수정 2] 다음 상태(next_state)를 계산해야 합니다.
-        next_state = self._get_observation()
-
-        # [수정 3] info 딕셔너리가 없으면 에러 날 수 있음
+        next_state = self._get_observation() # (원-핫 함수 연결 필요)
         info = {'step': self.current_step}
 
-        # [수정 4] 정의된 변수들을 리턴합니다.
         return next_state, reward, done, info
 
     def _get_observation(self):

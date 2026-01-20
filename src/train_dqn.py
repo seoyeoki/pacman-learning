@@ -1,80 +1,81 @@
 import numpy as np
-import pygame  # 이벤트 처리를 위해 추가
+import pygame
 import torch
-
 from pacman_env import PacmanEnv
 from dqn_agent import DQNAgent
 
-def flatten_state(grid):
-    """20x20 그리드를 1차원(400,) 배열로 변환"""
-    return grid.flatten()
+def get_one_hot_state(grid):
+    """
+    20x20 그리드 -> One-Hot Encoding -> 1차원 배열(2000개)
+    0:빈칸, 1:벽, 2:팩맨, 3:유령, 4:코인
+    """
+    # 채널 5개, 20x20 크기
+    state_one_hot = np.zeros((5, 20, 20), dtype=np.float32)
+
+    state_one_hot[0] = (grid == 0) # 빈칸
+    state_one_hot[1] = (grid == 1) # 벽
+    state_one_hot[2] = (grid == 2) # 팩맨
+    state_one_hot[3] = (grid == 3) # 유령
+    state_one_hot[4] = (grid == 4) # 코인
+
+    return state_one_hot.flatten() # 20*20*5 = 2000
 
 def main():
     env = PacmanEnv()
 
-    # 입력 크기: 20x20 = 400, 행동 크기: 4 (상하좌우)
-    state_size = 20 * 20
+    # 입력 크기 변경: 20x20 -> 20x20x5 = 2000
+    state_size = 20 * 20 * 5
     action_size = 4
 
     agent = DQNAgent(state_size, action_size)
 
-    EPISODES = 5000  # 총 학습 횟수
+    EPISODES = 500  # 테스트용 500판 (원하면 3000~5000 추천)
 
-    print("--- DQN Training Start ---")
+    print("--- DQN Training Start (One-Hot + Target Network) ---")
 
     for e in range(EPISODES):
-        # 환경 초기화
         grid_state = env.reset()
-        state = flatten_state(grid_state)
+        state = get_one_hot_state(grid_state) # [변경] 원-핫 인코딩
 
         done = False
         total_reward = 0
         step_count = 0
 
         while not done:
-            # -----------------------------------------------------------
-            # [수정된 부분] 윈도우 응답 없음 방지를 위한 이벤트 처리 루프
-            # -----------------------------------------------------------
+            # 윈도우 응답 없음 방지
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     env.close()
-                    return # 프로그램 즉시 종료
-            # -----------------------------------------------------------
+                    return
 
-            # 1. 행동 선택
+            # 행동 선택
             action = agent.get_action(state)
 
-            # 2. 환경 진행
+            # 환경 진행
             next_grid_state, reward, done, _ = env.step(action)
-            next_state = flatten_state(next_grid_state)
+            next_state = get_one_hot_state(next_grid_state) # [변경] 원-핫 인코딩
 
-            # 3. 기억 저장
+            # 기억 저장 및 학습
             agent.remember(state, action, reward, next_state, done)
-
-            # 4. 학습 (경험 리플레이)
             agent.train_step()
 
             state = next_state
             total_reward += reward
             step_count += 1
 
-            # 화면 그리기 조건
-            # 'e % 10 == 0'이면 10판마다 한 번만 보여줍니다. (학습 속도 향상)
-            # 매번 보고 싶으면 아래 조건을 'if True:'로 바꾸세요.
+            # 100판마다 화면 렌더링
             if e % 100 == 0:
                 env.render()
 
-        # 에피소드 종료 후 엡실론(탐험률) 감소
+        # 에피소드 종료 후: 타겟 네트워크 업데이트 & 엡실론 감소
+        agent.update_target_network()
         agent.update_epsilon()
 
-        print(f"Episode {e+1}/{EPISODES} | Score: {total_reward} | Steps: {step_count} | Epsilon: {agent.epsilon:.2f}")
+        print(f"Episode {e+1}/{EPISODES} | Score: {total_reward:.2f} | Steps: {step_count} | Epsilon: {agent.epsilon:.2f}")
 
-    # 학습 완료 후 리소스 정리
     env.close()
-    print("Training Finished.")
-
-    # 모델 저장 (선택 사항)
     torch.save(agent.model.state_dict(), "pacman_dqn.pth")
+    print("Training Finished.")
 
 if __name__ == "__main__":
     main()
