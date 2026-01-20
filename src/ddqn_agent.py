@@ -5,7 +5,7 @@ import numpy as np
 import random
 from collections import deque
 
-# 하이퍼파라미터
+# 하이퍼파라미터 (DQN과 동일하게 유지)
 BATCH_SIZE = 64
 LR = 0.0005
 GAMMA = 0.99
@@ -30,7 +30,7 @@ class QNetwork(nn.Module):
     def forward(self, x):
         return self.fc(x)
 
-class DQNAgent:
+class DDQNAgent:
     def __init__(self, state_size, action_size):
         self.state_size = state_size
         self.action_size = action_size
@@ -71,9 +71,13 @@ class DQNAgent:
 
         current_q = self.model(states).gather(1, actions)
 
-        # [Standard DQN] 타겟 모델이 MAX 값을 직접 계산
+        # [Double DQN Logic]
+        # 1. 행동 선택: Main Model
+        next_actions = self.model(next_states).argmax(1).unsqueeze(1)
+
+        # 2. 가치 평가: Target Model
         with torch.no_grad():
-            max_next_q = self.target_model(next_states).max(1)[0].unsqueeze(1)
+            max_next_q = self.target_model(next_states).gather(1, next_actions)
             target_q = rewards + (GAMMA * max_next_q * (1 - dones))
 
         loss = self.criterion(current_q, target_q)

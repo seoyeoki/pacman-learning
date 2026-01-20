@@ -3,9 +3,35 @@ import pygame
 import torch
 import csv
 import os
-
 from pacman_env import PacmanEnv
-from dqn_agent import DQNAgent
+
+# =================================================================
+# [설정] 사용할 모델을 문자열로 지정하세요.
+# 옵션: "DQN", "DDQN", "DUELING"
+MODEL_TYPE = "DDQN"
+# =================================================================
+
+# 모델 타입에 따라 클래스와 파일명 자동 설정
+if MODEL_TYPE == "DQN":
+    from dqn_agent import DQNAgent as Agent
+    print(f">>> ⚡ [Standard DQN] 모드로 학습을 준비합니다.")
+
+elif MODEL_TYPE == "DDQN":
+    from ddqn_agent import DDQNAgent as Agent
+    print(f">>> 🔥 [Double DQN] 모드로 학습을 준비합니다.")
+
+elif MODEL_TYPE == "DUELING":
+    # dueling_agent.py가 있어야 실행됩니다 (아래 3번 코드 참고)
+    from dueling_agent import DuelingAgent as Agent
+    print(f">>> ⚔️ [Dueling DQN] 모드로 학습을 준비합니다.")
+
+else:
+    raise ValueError(f"지원하지 않는 모델 타입입니다: {MODEL_TYPE}")
+
+# 파일명 자동 생성 (예: pacman_dqn.pth, log_ddqn.csv)
+model_filename = f"pacman_{MODEL_TYPE.lower()}.pth"
+log_filename = f"log_{MODEL_TYPE.lower()}.csv"
+
 
 def get_one_hot_state(grid):
     state_one_hot = np.zeros((5, 20, 20), dtype=np.float32)
@@ -20,18 +46,19 @@ def main():
     env = PacmanEnv()
     state_size = 20 * 20 * 5
     action_size = 4
-    agent = DQNAgent(state_size, action_size)
+
+    # 선택된 Agent 클래스로 인스턴스 생성
+    agent = Agent(state_size, action_size)
 
     EPISODES = 5000
 
-    log_filename = 'training_log.csv'
-    # 파일 생성 및 헤더 작성
+    print(f"--- Training Start: {MODEL_TYPE} ---")
+    print(f"Logs will be saved to: {log_filename}")
+    print(f"Model will be saved to: {model_filename}")
+
     with open(log_filename, 'w', newline='') as f:
         writer = csv.writer(f)
-        # 헤더 7개 확인!
         writer.writerow(['Episode', 'Score', 'Steps', 'Epsilon', 'Avg_Loss', 'Wall_Hits', 'Coins'])
-
-    print("--- DQN Training Start ---")
 
     for e in range(EPISODES):
         grid_state = env.reset()
@@ -39,10 +66,7 @@ def main():
         done = False
         total_reward = 0
         step_count = 0
-
-        # [수정 1] 이 리스트 초기화가 반드시 있어야 합니다!
         loss_list = []
-
         final_wall_hits = 0
         final_coins = 0
 
@@ -53,21 +77,16 @@ def main():
                     return
 
             action = agent.get_action(state)
-
-            # 환경 진행 (info 받아오기)
             next_grid_state, reward, done, info = env.step(action)
             next_state = get_one_hot_state(next_grid_state)
 
-            # 통계 갱신
             final_wall_hits = info['wall_hits']
             final_coins = info['coins_eaten']
 
             agent.remember(state, action, reward, next_state, done)
-
-            # 학습 및 오차 기록
             loss = agent.train_step()
             if loss is not None:
-                loss_list.append(loss) # 이제 에러 안 남
+                loss_list.append(loss)
 
             state = next_state
             total_reward += reward
@@ -79,20 +98,17 @@ def main():
         agent.update_target_network()
         agent.update_epsilon()
 
-        # 평균 Loss 계산
         avg_loss = np.mean(loss_list) if len(loss_list) > 0 else 0
 
-        # [수정 2] CSV 기록할 때 벽/코인 횟수도 같이 넣어줘야 합니다!
         with open(log_filename, 'a', newline='') as f:
             writer = csv.writer(f)
-            # 순서: Episode, Score, Steps, Epsilon, Loss, Wall, Coins
             writer.writerow([e+1, total_reward, step_count, agent.epsilon, avg_loss, final_wall_hits, final_coins])
 
-        print(f"Ep {e+1}/{EPISODES} | Score: {total_reward:.2f} | Wall: {final_wall_hits} | Coins: {final_coins} | Eps: {agent.epsilon:.2f}")
+        print(f"[{MODEL_TYPE}] Ep {e+1}/{EPISODES} | Score: {total_reward:.2f} | Wall: {final_wall_hits} | Coins: {final_coins} | Eps: {agent.epsilon:.2f}")
 
     env.close()
-    torch.save(agent.model.state_dict(), "pacman_dqn.pth")
-    print("Training Finished.")
+    torch.save(agent.model.state_dict(), model_filename)
+    print(f"Training Finished. Model saved as {model_filename}")
 
 if __name__ == "__main__":
     main()
