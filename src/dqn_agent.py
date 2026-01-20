@@ -70,10 +70,11 @@ class DQNAgent:
         """경험 저장"""
         self.memory.append((state, action, reward, next_state, done))
 
+    # dqn_agent.py 내부의 train_step 함수 교체
     def train_step(self):
         """학습 (Experience Replay + Target Network)"""
         if len(self.memory) < BATCH_SIZE:
-            return
+            return None # 학습 안 함
 
         batch = random.sample(self.memory, BATCH_SIZE)
         states, actions, rewards, next_states, dones = zip(*batch)
@@ -84,10 +85,10 @@ class DQNAgent:
         next_states = torch.FloatTensor(np.array(next_states)).to(device)
         dones = torch.FloatTensor(dones).unsqueeze(1).to(device)
 
-        # 1. 현재 예측값 (Main Model)
+        # 1. 현재 예측값
         current_q = self.model(states).gather(1, actions)
 
-        # 2. 정답값 (Target Model 사용) -> 학습 안정화의 핵심!
+        # 2. 정답값 (Double DQN 적용 전이면 기존 코드 유지)
         with torch.no_grad():
             max_next_q = self.target_model(next_states).max(1)[0].unsqueeze(1)
             target_q = rewards + (GAMMA * max_next_q * (1 - dones))
@@ -97,6 +98,9 @@ class DQNAgent:
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
+
+        # [추가됨] 학습 오차(Loss) 값을 반환합니다!
+        return loss.item()
 
     def update_target_network(self):
         """타겟 모델을 현재 모델과 동기화"""
