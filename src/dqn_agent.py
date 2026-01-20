@@ -5,18 +5,14 @@ import numpy as np
 import random
 from collections import deque
 
-
-# --- 매개변수 ---
-
-BATCH_SIZE = 64         # 한 번에 학습할 데이터 양 (RTX 4060이므로 128도 가능)
-LR = 0.0005             # 학습률 (0.001은 가끔 너무 튀어서, 조금 더 안정적인 0.0005 추천)
-GAMMA = 0.99            # 할인율 (미래 보상을 얼마나 중요하게 볼지, 0.99가 국룰)
-MEMORY_SIZE = 10000     # 리플레이 버퍼 크기 (최근 1만 개의 경험만 기억)
-
-# 탐험(Exploration) 관련 설정
-EPSILON_START = 1.0     # 100% 랜덤으로 시작
-EPSILON_END = 0.01      # 최소 1%는 계속 탐험하게 둠
-EPSILON_DECAY = 0.999   # 감소 속도 (이 값이 클수록 천천히 줄어듦)
+# --- 하이퍼파라미터 (5,000판 기준) ---
+BATCH_SIZE = 64
+LR = 0.0005
+GAMMA = 0.99
+MEMORY_SIZE = 10000
+EPSILON_START = 1.0
+EPSILON_END = 0.01
+EPSILON_DECAY = 0.999
 
 # GPU 사용 가능 여부 확인
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -25,7 +21,7 @@ class QNetwork(nn.Module):
     """Deep Q-Network 구조 정의"""
     def __init__(self, input_size, output_size):
         super(QNetwork, self).__init__()
-        # 입력이 2000개(20x20x5)로 늘어났으니, 첫 레이어도 256으로 확장
+        # 20x20x5 입력에 맞춰 256 뉴런으로 시작
         self.fc = nn.Sequential(
             nn.Linear(input_size, 256),
             nn.ReLU(),
@@ -42,13 +38,15 @@ class DQNAgent:
         self.state_size = state_size
         self.action_size = action_size
 
-        # [핵심] 네트워크 2개 생성 (행동대장 & 정답지 선생님)
+        # 1. 메인 모델 (행동대장)
         self.model = QNetwork(state_size, action_size).to(device)
+
+        # 2. 타겟 모델 (채점관)
         self.target_model = QNetwork(state_size, action_size).to(device)
 
-        # 처음엔 둘을 똑같이 동기화
+        # 초기화: 타겟 모델을 메인 모델과 똑같이 만듦
         self.target_model.load_state_dict(self.model.state_dict())
-        self.target_model.eval() # 타겟 모델은 학습(역전파) 안 함
+        self.target_model.eval() # 타겟 모델은 학습하지 않음
 
         self.optimizer = optim.Adam(self.model.parameters(), lr=LR)
         self.criterion = nn.MSELoss()
@@ -70,12 +68,12 @@ class DQNAgent:
         """경험 저장"""
         self.memory.append((state, action, reward, next_state, done))
 
-    # dqn_agent.py 내부의 train_step 함수 교체
     def train_step(self):
-        """학습 (Experience Replay + Target Network)"""
+        """학습 (Double DQN + Experience Replay)"""
         if len(self.memory) < BATCH_SIZE:
-            return None # 학습 안 함
+            return None # 데이터가 부족하면 학습 안 함 (Loss 없음)
 
+        # 랜덤 배치 추출
         batch = random.sample(self.memory, BATCH_SIZE)
         states, actions, rewards, next_states, dones = zip(*batch)
 
@@ -85,25 +83,35 @@ class DQNAgent:
         next_states = torch.FloatTensor(np.array(next_states)).to(device)
         dones = torch.FloatTensor(dones).unsqueeze(1).to(device)
 
-        # 1. 현재 예측값
+        # 1. 현재 상태에서의 예측값 (Main Model)
         current_q = self.model(states).gather(1, actions)
 
-        # 2. 정답값 (Double DQN 적용 전이면 기존 코드 유지)
-        with torch.no_grad():
-            max_next_q = self.target_model(next_states).max(1)[0].unsqueeze(1)
-            target_q = rewards + (GAMMA * max_next_q * (1 - dones))
+        # ---------------------------------------------------------
+        # [Double DQN 핵심 로직]
+        # ---------------------------------------------------------
+        # A. 행동 선택: '메인 모델'이 다음 상태에서 제일 좋은 행동을 고름 (argmax)
+        next_actions = self.model(next_states).argmax(1).unsqueeze(1)
 
-        # 3. 오차 계산 및 업데이트
+        # B. 점수 평가: '타겟 모델'이 그 행동의 점수를 매김 (gather)
+        #    detach()는 타겟 모델로 역전파가 흐르지 않게 차단하는 역할
+        with torch.no_grad():
+            max_next_q = self.target_model(next_states).gather(1, next_actions)
+
+            # C. 정답(Target Q) 계산
+            target_q = rewards + (GAMMA * max_next_q * (1 - dones))
+        # ---------------------------------------------------------
+
+        # 오차 계산 및 업데이트
         loss = self.criterion(current_q, target_q)
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
-        # [추가됨] 학습 오차(Loss) 값을 반환합니다!
+        # 로그 기록을 위해 Loss 값 반환
         return loss.item()
 
     def update_target_network(self):
-        """타겟 모델을 현재 모델과 동기화"""
+        """타겟 모델 동기화"""
         self.target_model.load_state_dict(self.model.state_dict())
 
     def update_epsilon(self):

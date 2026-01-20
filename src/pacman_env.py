@@ -53,61 +53,43 @@ class PacmanEnv:
 
         self.reset()
 
-    def reset(self):
-        """게임 재시작 및 맵 초기화"""
-        self.grid = self.base_grid.copy()
+def reset(self):
+    """게임 재시작 및 맵 초기화"""
+    self.grid = self.base_grid.copy()
+    # ... (기존 초기화 코드 유지) ...
 
-        # 팩맨 위치 초기화
-        pos = np.where(self.grid == PACMAN)
-        self.pacman_pos = [pos[0][0], pos[1][0]]
-        self.grid[self.pacman_pos[0], self.pacman_pos[1]] = EMPTY
+    # [추가] 통계용 카운터 초기화
+    self.wall_hits = 0
+    self.coins_eaten = 0
 
-        # 유령 위치 초기화
-        g_idx = np.where(self.grid == GHOST)
-        self.ghosts = [[g_idx[0][i], g_idx[1][i]] for i in range(len(g_idx[0]))]
-        for gr, gc in self.ghosts:
-            self.grid[gr, gc] = EMPTY
+    self.current_step = 0
+    return self._get_observation()
 
-        # 코인 배치
-        self.coins = []
-        for r in range(GRID_SIZE):
-            for c in range(GRID_SIZE):
-                if self.grid[r, c] == 0:
-                    self.grid[r, c] = COIN
-                    self.coins.append([r, c])
+def step(self, action):
+    self.current_step += 1
+    reward = -0.05  # [추천] 시간 페널티 강화 (-0.05 ~ -0.1)
+    done = False
 
-        self.current_step = 0
+    r, c = self.pacman_pos
+    nr, nc = r + DX[action], c + DY[action]
 
-        # [수정 1] self.state는 정의된 적이 없습니다. 현재 상태를 계산해서 반환해야 합니다.
-        return self._get_observation()
+    # 벽 충돌 체크
+    if not (0 <= nr < GRID_SIZE and 0 <= nc < GRID_SIZE) or self.grid[nr, nc] == WALL:
+        reward = -1.0
+        self.wall_hits += 1  # [추가] 벽 충돌 카운트
+    else:
+        self.pacman_pos = [nr, nc]
 
-    def step(self, action):
-        self.current_step += 1
+        # 코인 먹기
+        if self.grid[nr, nc] == COIN:
+            reward += 10.0
+            self.coins_eaten += 1  # [추가] 코인 섭취 카운트
+            self.grid[nr, nc] = EMPTY
+            self.coins.remove([nr, nc])
 
-        # [추천 1] 시간 페널티: 작지만 확실하게 (-0.05)
-        reward = -0.05
-        done = False
-
-        r, c = self.pacman_pos
-        nr, nc = r + DX[action], c + DY[action]
-
-        # [추천 2] 벽 충돌 페널티: 이동보다 더 아프게 (-1.0)
-        if not (0 <= nr < GRID_SIZE and 0 <= nc < GRID_SIZE) or self.grid[nr, nc] == WALL:
-            reward = -1.0
-            # 위치 이동 없음 (제자리)
-        else:
-            self.pacman_pos = [nr, nc]
-
-            # [추천 3] 코인 보상 (+10)
-            if self.grid[nr, nc] == COIN:
-                reward += 10.0
-                self.grid[nr, nc] = EMPTY
-                self.coins.remove([nr, nc])
-
-                # [추천 4] 클리어 보너스 (+50)
-                if len(self.coins) == 0:
-                    reward += 50.0
-                    done = True
+            if len(self.coins) == 0:
+                reward += 50
+                done = True
 
         # 3. 유령 이동
         for i, ghost in enumerate(self.ghosts):
@@ -133,8 +115,14 @@ class PacmanEnv:
         if self.current_step >= self.max_steps:
             done = True
 
-        next_state = self._get_observation() # (원-핫 함수 연결 필요)
-        info = {'step': self.current_step}
+        next_state = self._get_observation()
+
+        # [수정] info 딕셔너리에 통계 정보 담아서 반환
+        info = {
+            'step': self.current_step,
+            'wall_hits': self.wall_hits,
+            'coins_eaten': self.coins_eaten
+        }
 
         return next_state, reward, done, info
 
