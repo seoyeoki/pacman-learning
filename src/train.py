@@ -6,32 +6,31 @@ import os
 from pacman_env import PacmanEnv
 
 # =================================================================
-# [설정] 사용할 모델을 문자열로 지정하세요.
+# [설정] 여기에 원하는 모델 이름을 적으세요.
 # 옵션: "DQN", "DDQN", "DUELING"
 MODEL_TYPE = "DDQN"
 # =================================================================
 
-# 모델 타입에 따라 클래스와 파일명 자동 설정
+# 1. 파일 이름 자동 생성 (소문자로 변환)
+# 예: DDQN -> "log_ddqn.csv", "pacman_ddqn.pth"
+log_filename = f"log_{MODEL_TYPE.lower()}.csv"
+model_filename = f"pacman_{MODEL_TYPE.lower()}.pth"
+
+# 2. 모델 타입에 맞는 에이전트 불러오기
 if MODEL_TYPE == "DQN":
     from dqn_agent import DQNAgent as Agent
-    print(f">>> ⚡ [Standard DQN] 모드로 학습을 준비합니다.")
+    print(f">>> ⚡ [Standard DQN] 모드로 설정됨.")
 
 elif MODEL_TYPE == "DDQN":
     from ddqn_agent import DDQNAgent as Agent
-    print(f">>> 🔥 [Double DQN] 모드로 학습을 준비합니다.")
+    print(f">>> 🔥 [Double DQN] 모드로 설정됨.")
 
 elif MODEL_TYPE == "DUELING":
-    # dueling_agent.py가 있어야 실행됩니다 (아래 3번 코드 참고)
     from dueling_agent import DuelingAgent as Agent
-    print(f">>> ⚔️ [Dueling DQN] 모드로 학습을 준비합니다.")
+    print(f">>> ⚔️ [Dueling DQN] 모드로 설정됨.")
 
 else:
     raise ValueError(f"지원하지 않는 모델 타입입니다: {MODEL_TYPE}")
-
-# 파일명 자동 생성 (예: pacman_dqn.pth, log_ddqn.csv)
-model_filename = f"pacman_{MODEL_TYPE.lower()}.pth"
-log_filename = f"log_{MODEL_TYPE.lower()}.csv"
-
 
 def get_one_hot_state(grid):
     state_one_hot = np.zeros((5, 20, 20), dtype=np.float32)
@@ -47,15 +46,15 @@ def main():
     state_size = 20 * 20 * 5
     action_size = 4
 
-    # 선택된 Agent 클래스로 인스턴스 생성
     agent = Agent(state_size, action_size)
 
     EPISODES = 5000
 
     print(f"--- Training Start: {MODEL_TYPE} ---")
-    print(f"Logs will be saved to: {log_filename}")
-    print(f"Model will be saved to: {model_filename}")
+    print(f"📄 로그 저장: {log_filename}")
+    print(f"💾 모델 저장: {model_filename}")
 
+    # CSV 파일 생성
     with open(log_filename, 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(['Episode', 'Score', 'Steps', 'Epsilon', 'Avg_Loss', 'Wall_Hits', 'Coins'])
@@ -100,6 +99,7 @@ def main():
 
         avg_loss = np.mean(loss_list) if len(loss_list) > 0 else 0
 
+        # 로그 파일에 기록 (위에서 만든 log_filename 사용)
         with open(log_filename, 'a', newline='') as f:
             writer = csv.writer(f)
             writer.writerow([e+1, total_reward, step_count, agent.epsilon, avg_loss, final_wall_hits, final_coins])
@@ -107,6 +107,8 @@ def main():
         print(f"[{MODEL_TYPE}] Ep {e+1}/{EPISODES} | Score: {total_reward:.2f} | Wall: {final_wall_hits} | Coins: {final_coins} | Eps: {agent.epsilon:.2f}")
 
     env.close()
+
+    # 모델 파일 저장 (위에서 만든 model_filename 사용)
     torch.save(agent.model.state_dict(), model_filename)
     print(f"Training Finished. Model saved as {model_filename}")
 

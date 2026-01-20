@@ -6,11 +6,12 @@ import numpy as np
 from pacman_env import PacmanEnv
 
 # =================================================================
-# [설정] 테스트할 모델을 문자열로 지정하세요.
-MODEL_TYPE = "DDQN"  # "DQN", "DDQN", "DUELING"
+# [설정] 테스트할 모델 타입을 선택하세요.
+# (train.py에서 학습시킨 모델과 같아야 파일을 찾을 수 있습니다)
+MODEL_TYPE = "DDQN"
 # =================================================================
 
-# 파일명 자동 설정
+# 파일 이름 자동 설정
 model_filename = f"pacman_{MODEL_TYPE.lower()}.pth"
 
 if MODEL_TYPE == "DQN":
@@ -21,7 +22,6 @@ elif MODEL_TYPE == "DUELING":
     from dueling_agent import DuelingAgent as Agent
 else:
     raise ValueError(f"Unknown Model Type: {MODEL_TYPE}")
-
 
 def get_one_hot_state(grid):
     state_one_hot = np.zeros((5, 20, 20), dtype=np.float32)
@@ -38,15 +38,17 @@ def run_test():
     action_size = 4
     agent = Agent(state_size, action_size)
 
-    print(f"\n=== 🧠 {MODEL_TYPE} 모델 로딩 중... ===")
-    print(f"Target File: {model_filename}")
+    print(f"\n=== 🧠 {MODEL_TYPE} 모델 테스트 모드 ===")
+    print(f"📂 불러올 파일: {model_filename}")
 
     try:
+        # 모델 로드
         agent.model.load_state_dict(torch.load(model_filename, map_location=torch.device('cpu')))
-        agent.epsilon = 0.0
-        print(f">>> 로드 성공! AI가 플레이합니다.")
+        agent.epsilon = 0.0 # 테스트니까 무조건 실력으로(Greedy)
+        print(f">>> 로드 성공! AI가 플레이를 시작합니다.")
     except FileNotFoundError:
-        print(f">>> 🚨 파일이 없습니다. 먼저 '{MODEL_TYPE}' 모드로 학습을 돌려주세요.")
+        print(f">>> 🚨 오류: '{model_filename}' 파일이 없습니다.")
+        print(f">>> 먼저 train.py에서 MODEL_TYPE = '{MODEL_TYPE}'로 학습을 완료하세요.")
         return
 
     grid_state = env.reset()
@@ -54,8 +56,6 @@ def run_test():
     done = False
     total_reward = 0
     step = 0
-
-    print(f"--- {MODEL_TYPE} Play Start ---")
 
     while not done:
         for event in pygame.event.get():
@@ -70,12 +70,13 @@ def run_test():
         total_reward += reward
         step += 1
 
+        # 실시간 로그 출력
         print(f"Step: {step} | Reward: {reward:.2f} | Total: {total_reward:.2f}")
 
         env.render()
-        time.sleep(0.05)
+        time.sleep(0.05) # 속도 조절
 
-    print(f"[{MODEL_TYPE}] 종료! 점수: {total_reward:.2f}, 스텝: {step}")
+    print(f"[{MODEL_TYPE}] 게임 종료! 최종 점수: {total_reward:.2f}, 생존: {step} 스텝")
     time.sleep(2)
     env.close()
 
