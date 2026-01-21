@@ -2,7 +2,6 @@ import numpy as np
 import pygame
 import torch
 import csv
-import os
 from datetime import datetime # [추가] 날짜 기능을 위해 필요
 from pacman_env import PacmanEnv
 
@@ -24,9 +23,9 @@ model_filename = f"pacman_{MODEL_TYPE.lower()}.pth"
 
 # 모델 선택 로직 (기존과 동일)
 if MODEL_TYPE == "DQN":
-    from dqn_agent import DQNAgent as Agent
+    from src.model_agent.dqn_agent import DQNAgent as Agent
 elif MODEL_TYPE == "DDQN":
-    from ddqn_agent import DDQNAgent as Agent
+    from src.model_agent.ddqn_agent import DDQNAgent as Agent
 elif MODEL_TYPE == "DUELING":
     from dueling_agent import DuelingAgent as Agent
 else:

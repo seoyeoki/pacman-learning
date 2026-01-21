@@ -3,7 +3,6 @@ import torch
 import time
 import numpy as np
 import csv
-import os
 from datetime import datetime
 from pacman_env import PacmanEnv
 
@@ -27,16 +26,16 @@ RESULT_FILENAME = f"test_result_{MODEL_TYPE}_{current_time}.csv"
 
 # --- 모델 타입에 따른 클래스 및 파일 설정 ---
 if MODEL_TYPE == "RANDOM":
-    from random_agent import RandomAgent as AgentClass
+    from src.model_agent.random_agent import RandomAgent as AgentClass
     model_filename = None
 
 elif MODEL_TYPE == "DQN":
-    from dqn_agent import DQNAgent as AgentClass
-    model_filename = "pacman_dqn.pth"
+    from src.model_agent.dqn_agent import DQNAgent as AgentClass
+    model_filename = "../trained_pth/pacman_dqn.pth"
 
 elif MODEL_TYPE == "DDQN":
-    from ddqn_agent import DDQNAgent as AgentClass
-    model_filename = "pacman_ddqn.pth"
+    from src.model_agent.ddqn_agent import DDQNAgent as AgentClass
+    model_filename = "../trained_pth/pacman_ddqn.pth"
 
 elif MODEL_TYPE == "DUELING":
     from dueling_agent import DuelingAgent as AgentClass
