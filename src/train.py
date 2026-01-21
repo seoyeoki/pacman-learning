@@ -3,19 +3,26 @@ import pygame
 import torch
 import csv
 import os
+from datetime import datetime # [추가] 날짜 기능을 위해 필요
 from pacman_env import PacmanEnv
 
 # =================================================================
 # [설정] 모델 타입 선택
-# 옵션: "DQN", "DDQN", "DUELING"
 MODEL_TYPE = "DDQN"
 # =================================================================
 
-# 파일명 자동 생성
-log_filename = f"log_{MODEL_TYPE.lower()}.csv"
+# 1. 현재 시간 구하기 (예: 20240521_153000)
+current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+# 2. 파일명에 시간 포함시키기
+# 로그 파일: 매번 새로운 파일 생성 (기록 보존용)
+log_filename = f"train_log_{MODEL_TYPE}_{current_time}.csv"
+
+# 모델 파일: 편의상 최신 파일 하나로 덮어쓰기 유지 (test.py가 찾기 쉽게)
+# (원하시면 모델 파일명에도 시간을 붙일 수 있지만, 그러면 테스트할 때마다 파일명을 수정해야 합니다.)
 model_filename = f"pacman_{MODEL_TYPE.lower()}.pth"
 
-# 모델 선택 로직
+# 모델 선택 로직 (기존과 동일)
 if MODEL_TYPE == "DQN":
     from dqn_agent import DQNAgent as Agent
 elif MODEL_TYPE == "DDQN":
@@ -35,22 +42,17 @@ def get_one_hot_state(grid):
     return state_one_hot.flatten()
 
 def main():
-    # 학습 속도를 높이려면 render를 아예 안 하는 게 좋습니다.
-    # 화면을 안 띄우고 싶다면 PacmanEnv() 내부에서 pygame.display.set_mode를 주석 처리하거나
-    # render() 함수 호출을 아예 지워야 하지만, 일단 여기서는 호출 빈도만 줄입니다.
     env = PacmanEnv()
     state_size = 20 * 20 * 5
     action_size = 4
-
     agent = Agent(state_size, action_size)
-
     EPISODES = 5000
 
     print(f"--- Training Start: {MODEL_TYPE} ---")
-    print(f"📄 로그는 '{log_filename}' 파일에만 저장됩니다.")
-    print("🚀 학습 중... (터미널 출력은 100 에피소드마다 갱신됩니다)")
+    print(f"📄 로그 파일: {log_filename}") # 바뀐 파일명 확인
+    print(f"💾 모델 저장: {model_filename}")
 
-    # CSV 파일 초기화
+    # CSV 파일 생성
     with open(log_filename, 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(['Episode', 'Score', 'Steps', 'Epsilon', 'Avg_Loss', 'Wall_Hits', 'Coins'])
@@ -79,15 +81,18 @@ def main():
             final_coins = info['coins_eaten']
 
             agent.remember(state, action, reward, next_state, done)
-            loss = agent.train_step()
-            if loss is not None:
-                loss_list.append(loss)
+
+            # 4스텝마다 학습 (속도 최적화)
+            if len(agent.memory) > 64 and step_count % 4 == 0:
+                loss = agent.train_step()
+                if loss is not None:
+                    loss_list.append(loss)
 
             state = next_state
             total_reward += reward
             step_count += 1
 
-            # [옵션] 학습 화면도 100판에 한 번만, 혹은 아예 주석 처리해서 끄세요.
+            # 화면은 100판마다 (속도 최적화)
             if (e + 1) % 100 == 0:
                 env.render()
 
@@ -96,18 +101,17 @@ def main():
 
         avg_loss = np.mean(loss_list) if len(loss_list) > 0 else 0
 
-        # 1. 로그 파일 저장은 매 판 수행 (데이터 확보용)
+        # 로그 저장
         with open(log_filename, 'a', newline='') as f:
             writer = csv.writer(f)
             writer.writerow([e+1, total_reward, step_count, agent.epsilon, avg_loss, final_wall_hits, final_coins])
 
-        # 2. 터미널 출력은 100판마다 한 번만 (생존 신고용)
         if (e + 1) % 100 == 0:
             print(f"[{MODEL_TYPE}] Ep {e+1}/{EPISODES} | Score: {total_reward:.2f} | Wall: {final_wall_hits} | Coins: {final_coins} | Eps: {agent.epsilon:.2f}")
 
     env.close()
     torch.save(agent.model.state_dict(), model_filename)
-    print(f"\nTraining Finished! Model saved as {model_filename}")
+    print(f"\nTraining Finished! Saved to {log_filename}")
 
 if __name__ == "__main__":
     main()
