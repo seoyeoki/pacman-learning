@@ -21,25 +21,25 @@ MODEL_TYPE = "DDQN"
 current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
 
 # 2. 결과 파일명 생성 (매번 새로운 파일)
-RESULT_FILENAME = f"test_result_{MODEL_TYPE}_{current_time}.csv"
+RESULT_FILENAME = f"../test_result/test_result_{MODEL_TYPE}_{current_time}.csv"
 
 
 # --- 모델 타입에 따른 클래스 및 파일 설정 ---
 if MODEL_TYPE == "RANDOM":
-    from src.model_agent.random_agent import RandomAgent as AgentClass
+    from model_agent.random_agent import RandomAgent as AgentClass
     model_filename = None
 
 elif MODEL_TYPE == "DQN":
-    from src.model_agent.dqn_agent import DQNAgent as AgentClass
+    from model_agent.dqn_agent import DQNAgent as AgentClass
     model_filename = "../trained_pth/pacman_dqn.pth"
 
 elif MODEL_TYPE == "DDQN":
-    from src.model_agent.ddqn_agent import DDQNAgent as AgentClass
+    from model_agent.ddqn_agent import DDQNAgent as AgentClass
     model_filename = "../trained_pth/pacman_ddqn.pth"
 
 elif MODEL_TYPE == "DUELING":
-    from dueling_agent import DuelingAgent as AgentClass
-    model_filename = "pacman_dueling.pth"
+    from model_agent.dueling_agent import DuelingAgent as AgentClass
+    model_filename = "../trained_pth/pacman_dueling.pth"
 
 else:
     raise ValueError(f"지원하지 않는 모델 타입입니다: {MODEL_TYPE}")

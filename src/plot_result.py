@@ -13,7 +13,7 @@ COMPARE_MODE = False
 
 def plot_single_model(model_name):
     """하나의 모델에 대해 자세한 4분할 그래프 그리기"""
-    filename = f"log_{model_name.lower()}.csv"
+    filename = f"../train_result/log_{model_name.lower()}.csv"
 
     if not os.path.exists(filename):
         print(f"❌ '{filename}' 파일이 없습니다. 먼저 학습을 진행하세요.")
@@ -78,7 +78,7 @@ def plot_comparison():
     found_any = False
 
     for model in models:
-        filename = f"log_{model.lower()}.csv"
+        filename = f"../train_result/log_{model.lower()}.csv"
         if not os.path.exists(filename):
             continue
 

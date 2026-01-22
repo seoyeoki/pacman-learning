@@ -15,19 +15,19 @@ current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
 
 # 2. 파일명에 시간 포함시키기
 # 로그 파일: 매번 새로운 파일 생성 (기록 보존용)
-log_filename = f"train_log_{MODEL_TYPE}_{current_time}.csv"
+log_filename = f"../train_result/train_log_{MODEL_TYPE}_{current_time}.csv"
 
 # 모델 파일: 편의상 최신 파일 하나로 덮어쓰기 유지 (test.py가 찾기 쉽게)
 # (원하시면 모델 파일명에도 시간을 붙일 수 있지만, 그러면 테스트할 때마다 파일명을 수정해야 합니다.)
-model_filename = f"pacman_{MODEL_TYPE.lower()}.pth"
+model_filename = f"../trained_pth/pacman_{MODEL_TYPE.lower()}.pth"
 
 # 모델 선택 로직 (기존과 동일)
 if MODEL_TYPE == "DQN":
-    from src.model_agent.dqn_agent import DQNAgent as Agent
+    from model_agent.dqn_agent import DQNAgent as Agent
 elif MODEL_TYPE == "DDQN":
-    from src.model_agent.ddqn_agent import DDQNAgent as Agent
+    from model_agent.ddqn_agent import DDQNAgent as Agent
 elif MODEL_TYPE == "DUELING":
-    from dueling_agent import DuelingAgent as Agent
+    from model_agent.dueling_agent import DuelingAgent as Agent
 else:
     raise ValueError(f"Unknown Model Type: {MODEL_TYPE}")
 
