@@ -114,14 +114,14 @@ class PacmanEnv:
 
         # 벽 충돌 체크
         if not (0 <= nr < GRID_SIZE and 0 <= nc < GRID_SIZE) or self.grid[nr, nc] == WALL:
-            reward = -1.0
+            reward = -0.2
             self.wall_hits += 1
         else:
             self.pacman_pos = [nr, nc]
 
             # 코인 획득
             if self.grid[nr, nc] == COIN:
-                reward += 10.0
+                reward += 50.0
                 self.coins_eaten += 1
                 self.grid[nr, nc] = EMPTY
                 if [nr, nc] in self.coins:

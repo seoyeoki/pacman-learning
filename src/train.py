@@ -7,7 +7,7 @@ from pacman_env import PacmanEnv
 
 # =================================================================
 # [설정] 모델 타입 선택
-MODEL_TYPE = "DDQN"
+MODEL_TYPE = "DUELING"
 # =================================================================
 
 # 1. 현재 시간 구하기 (예: 20240521_153000)
@@ -15,7 +15,7 @@ current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
 
 # 2. 파일명에 시간 포함시키기
 # 로그 파일: 매번 새로운 파일 생성 (기록 보존용)
-log_filename = f"../train_result/train_log_{MODEL_TYPE}_{current_time}.csv"
+log_filename = f"../train_result/train_log_{MODEL_TYPE.lower()}_{current_time}.csv"
 
 # 모델 파일: 편의상 최신 파일 하나로 덮어쓰기 유지 (test.py가 찾기 쉽게)
 # (원하시면 모델 파일명에도 시간을 붙일 수 있지만, 그러면 테스트할 때마다 파일명을 수정해야 합니다.)
@@ -45,7 +45,7 @@ def main():
     state_size = 20 * 20 * 5
     action_size = 4
     agent = Agent(state_size, action_size)
-    EPISODES = 5000
+    EPISODES = 20000
 
     print(f"--- Training Start: {MODEL_TYPE} ---")
     print(f"📄 로그 파일: {log_filename}") # 바뀐 파일명 확인
