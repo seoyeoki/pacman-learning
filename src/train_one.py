@@ -5,19 +5,16 @@ import csv
 import gc
 from datetime import datetime
 from pacman_env import PacmanEnv
+from collections import deque
 
 # =================================================================
 # [설정] 주말 풀가동 최적화 세팅
 # =================================================================
-# 1. 모델: 가장 똑똑했던 DDQN 선택
 MODEL_TYPE = "CNN_DDQN"
-
-# 2. 횟수: 주말 동안 충분히 돌도록 50,000으로 상향
 EPISODES = 50000
-CHECKPOINT_FREQ = 2000  # 2000판마다 저장
-
-# 3. 학습 빈도: 4프레임마다 1번 학습 (속도 3배 향상 + 안정성)
+CHECKPOINT_FREQ = 2000
 TRAIN_FREQUENCY = 4
+STACK_SIZE = 4  # 프레임 스택 개수
 # =================================================================
 
 # 에이전트 클래스 미리 가져오기
@@ -41,6 +38,22 @@ def get_one_hot_state(grid, pacman_pos, ghosts):
         state[3][gr, gc] = 1.0 # 유령
     return state
 
+def get_stacked_state(history_buffer, new_state):
+    """
+    history_buffer: deque 객체 (최근 N개의 상태 저장)
+    new_state: 방금 얻은 상태 (5, 20, 20)
+    """
+    # 1. 버퍼에 새 상태 추가
+    history_buffer.append(new_state)
+
+    # 2. 만약 버퍼가 덜 찼으면(초기 상태), 첫 상태로 채움
+    while len(history_buffer) < STACK_SIZE:
+        history_buffer.append(new_state)
+
+    # 3. 채널 방향(axis=0)으로 합치기
+    # 결과 모양: (20, 20, 20) -> (5채널 * 4장)
+    return np.concatenate(history_buffer, axis=0)
+
 def main():
     # 파일명 설정
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -51,6 +64,7 @@ def main():
     print(f"🚀 WEEKEND TRAINING START: {MODEL_TYPE}")
     print(f"🎯 Episodes: {EPISODES}")
     print(f"⚡ Train Frequency: Every {TRAIN_FREQUENCY} steps")
+    print(f"📚 Frame Stacking: {STACK_SIZE} frames")
     print(f"📄 Log File: {log_filename}")
     print(f"💾 Model Save: {model_filename}")
     print(f"{'='*60}\n")
@@ -60,23 +74,30 @@ def main():
     AgentClass = get_agent_class(MODEL_TYPE)
     agent = AgentClass(action_size=4)
 
-    # [중요] 장기 학습을 위해 엡실론 감쇠율(decay) 미세 조정 (선택 사항)
-    # 에피소드가 늘어난 만큼 천천히 줄어들게 설정 (기본값보다 조금 느리게)
-    # agent.epsilon_decay = 0.99995  # 필요하다면 주석 해제하여 사용
-
     # 로그 파일 헤더 작성
     with open(log_filename, 'w', newline='') as f:
         csv.writer(f).writerow(['Episode', 'Score', 'Steps', 'Epsilon', 'Avg_Loss', 'Wall_Hits', 'Coins'])
 
     try:
+        # 큐 생성 (maxlen=4로 자동 관리)
+        state_buffer = deque(maxlen=STACK_SIZE)
+
         for e in range(EPISODES):
             env.reset()
-            state = get_one_hot_state(env.grid, env.pacman_pos, env.ghosts)
+            # 초기화 시 버퍼 비우기
+            state_buffer.clear()
 
+            # [수정됨] 루프 시작 전 변수 초기화 (매우 중요!)
             done = False
             total_reward = 0
             step_count = 0
             loss_list = []
+
+            # 첫 상태 가져오기
+            initial_state = get_one_hot_state(env.grid, env.pacman_pos, env.ghosts)
+
+            # 스택된 상태 만들기 (이게 진짜 state가 됨)
+            state = get_stacked_state(state_buffer, initial_state)
 
             while not done:
                 # 윈도우 응답 없음 방지
@@ -87,8 +108,14 @@ def main():
 
                 action = agent.get_action(state)
                 next_grid, reward, done, info = env.step(action)
-                next_state = get_one_hot_state(next_grid, env.pacman_pos, env.ghosts)
 
+                # 다음 상태 전처리
+                raw_next_state = get_one_hot_state(next_grid, env.pacman_pos, env.ghosts)
+
+                # 스택된 다음 상태 생성
+                next_state = get_stacked_state(state_buffer, raw_next_state)
+
+                # [수정됨] 중복 제거: 한 번만 저장해야 함
                 agent.remember(state, action, reward, next_state, done)
 
                 # [최적화] 데이터가 2000개 이상 쌓였을 때, 4번 중 1번만 학습
@@ -97,6 +124,7 @@ def main():
                         loss = agent.train_step()
                         if loss: loss_list.append(loss)
 
+                # 상태 업데이트
                 state = next_state
                 total_reward += reward
                 step_count += 1
@@ -123,12 +151,10 @@ def main():
         print(f"\n🛑 {MODEL_TYPE} 학습 강제 중단됨!")
 
     finally:
-        # 학습 완료(혹은 중단) 시 모델 저장 및 리소스 정리
         env.close()
         torch.save(agent.model.state_dict(), model_filename)
         print(f"✨ Finished & Saved: {MODEL_TYPE}")
 
-        # 메모리 정리
         del agent
         del env
         torch.cuda.empty_cache()

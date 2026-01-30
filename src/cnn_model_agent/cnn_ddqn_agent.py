@@ -20,7 +20,7 @@ class CNNQNetwork(nn.Module):
         super(CNNQNetwork, self).__init__()
 
         self.conv = nn.Sequential(
-            nn.Conv2d(5, 32, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(20, 32, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
             nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
