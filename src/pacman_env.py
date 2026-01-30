@@ -63,9 +63,55 @@ class PacmanEnv:
 
         self.reset()
 
+    def generate_random_map(self):
+        """DFS 알고리즘으로 매번 새로운 미로 생성 (완전 연결 보장)"""
+        grid = np.ones((GRID_SIZE, GRID_SIZE), dtype=int) # 일단 다 벽으로 채움
+
+        # (1,1)에서 시작
+        r, c = 1, 1
+        grid[r, c] = EMPTY
+        stack = [(r, c)]
+
+        while stack:
+            r, c = stack[-1]
+            neighbors = []
+
+            # 2칸 건너뛰며 탐색 (벽 두께 유지)
+            for i in range(4):
+                nr, nc = r + DX[i]*2, c + DY[i]*2
+                if 1 <= nr < GRID_SIZE-1 and 1 <= nc < GRID_SIZE-1:
+                    if grid[nr, nc] == WALL:
+                        neighbors.append((i, nr, nc))
+
+            if neighbors:
+                idx, nr, nc = random.choice(neighbors)
+                # 현재 위치와 다음 위치 사이의 벽을 뚫음
+                mr, mc = r + DX[idx], c + DY[idx]
+                grid[mr, mc] = EMPTY
+                grid[nr, nc] = EMPTY
+                stack.append((nr, nc))
+            else:
+                stack.pop()
+
+        # [옵션] 너무 꽉 막힌 미로가 되지 않게 벽을 무작위로 10% 정도 더 뚫어줌 (순환로 생성)
+        # 이 부분이 있어야 팩맨이 갇히지 않고 도망갈 구멍이 생깁니다.
+        for _ in range(int(GRID_SIZE * GRID_SIZE * 0.1)):
+            rr = random.randint(1, GRID_SIZE-2)
+            rc = random.randint(1, GRID_SIZE-2)
+            if grid[rr, rc] == WALL:
+                # 상하좌우 중 빈 공간이 2개 이상이면 뚫어도 됨
+                empty_cnt = 0
+                for i in range(4):
+                    if grid[rr+DX[i], rc+DY[i]] == EMPTY:
+                        empty_cnt += 1
+                if empty_cnt >= 2:
+                    grid[rr, rc] = EMPTY
+
+        return grid
+
     def reset(self):
         """게임 재시작"""
-        self.grid = self.base_grid.copy()
+        self.grid = self.generate_random_map()
 
         # 1. 코인 배치 (빈 길에 모두 배치)
         self.coins = []
@@ -114,7 +160,7 @@ class PacmanEnv:
 
         # 벽 충돌 체크
         if not (0 <= nr < GRID_SIZE and 0 <= nc < GRID_SIZE) or self.grid[nr, nc] == WALL:
-            reward = -0.2
+            reward = -5.0
             self.wall_hits += 1
         else:
             self.pacman_pos = [nr, nc]

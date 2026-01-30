@@ -7,149 +7,138 @@ from datetime import datetime
 from pacman_env import PacmanEnv
 
 # =================================================================
-# [설정] 테스트할 모델 타입을 선택하세요.
-# =================================================================
-MODEL_TYPE = "DUELING"  # "DQN", "DDQN", "DUELING", "RANDOM"
-NUM_TEST_EPISODES = 10  # 테스트 반복 횟수
-RENDER_DELAY = 0.01     # 관전 속도 (빠른 진행을 위해 0.01 추천)
+# [설정] 테스트할 모델 타입
+# "CNN_DQN", "CNN_DDQN", "CNN_DUELING"
+MODEL_TYPE = "RANDOM"
+NUM_TEST_EPISODES = 10
 # =================================================================
 
-# 1. 파일명 생성 (타임스탬프)
 current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
 RESULT_FILENAME = f"../test_result/test_summary_{MODEL_TYPE}_{current_time}.csv"
 
-# --- 모델 타입에 따른 클래스 및 파일 설정 ---
-if MODEL_TYPE == "RANDOM":
-    from model_agent.random_agent import RandomAgent as AgentClass
-    model_filename = None
-elif MODEL_TYPE == "DQN":
-    from model_agent.dqn_agent import DQNAgent as AgentClass
-    model_filename = "../trained_pth/pacman_dqn.pth"
-elif MODEL_TYPE == "DDQN":
-    from model_agent.ddqn_agent import DDQNAgent as AgentClass
-    model_filename = "../trained_pth/pacman_ddqn.pth"
-elif MODEL_TYPE == "DUELING":
-    from model_agent.dueling_agent import DuelingAgent as AgentClass
-    model_filename = "../trained_pth/pacman_dueling.pth"
+# 모델 로드 로직
+if MODEL_TYPE == "CNN_DQN":
+    from cnn_model_agent.cnn_dqn_agent import CNNDQNAgent as AgentClass
+    model_filename = "../trained_pth/pacman_cnn_dqn.pth"
+elif MODEL_TYPE == "CNN_DDQN":
+    from cnn_model_agent.cnn_ddqn_agent import CNNDDQNAgent as AgentClass
+    model_filename = "../trained_pth/pacman_cnn_ddqn.pth"
+elif MODEL_TYPE == "CNN_DUELING":import pygame
+import torch
+import time
+import numpy as np
+import csv
+from datetime import datetime
+from pacman_env import PacmanEnv
+
+# =================================================================
+# [설정] 테스트할 모델 타입
+# 옵션: "CNN_DQN", "CNN_DDQN", "CNN_DUELING", "RANDOM"
+MODEL_TYPE = "RANDOM"
+NUM_TEST_EPISODES = 10
+# =================================================================
+
+current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+RESULT_FILENAME = f"../test_result/test_summary_{MODEL_TYPE}_{current_time}.csv"
+
+# 모델 로드 로직
+model_filename = None # 초기화
+
+if MODEL_TYPE == "CNN_DQN":
+    from cnn_model_agent.cnn_dqn_agent import CNNDQNAgent as AgentClass
+    model_filename = "../trained_pth/pacman_cnn_dqn.pth"
+elif MODEL_TYPE == "CNN_DDQN":
+    from cnn_model_agent.cnn_ddqn_agent import CNNDDQNAgent as AgentClass
+    model_filename = "../trained_pth/pacman_cnn_ddqn.pth"
+elif MODEL_TYPE == "CNN_DUELING":
+    from cnn_model_agent.cnn_dueling_agent import CNNDuelingAgent as AgentClass
+    model_filename = "../trained_pth/pacman_cnn_dueling.pth"
+elif MODEL_TYPE == "RANDOM":
+    # 위에서 만든 random_agent.py가 있어야 합니다.
+    from cnn_model_agent.random_agent import RandomAgent as AgentClass
+    model_filename = None # 랜덤은 불러올 파일 없음
 else:
-    raise ValueError(f"지원하지 않는 모델 타입입니다: {MODEL_TYPE}")
+    raise ValueError(f"Unknown MODEL_TYPE: {MODEL_TYPE}")
 
-def get_one_hot_state(grid):
-    state_one_hot = np.zeros((5, 20, 20), dtype=np.float32)
-    state_one_hot[0] = (grid == 0) # 길
-    state_one_hot[1] = (grid == 1) # 벽
-    state_one_hot[2] = (grid == 2) # 팩맨
-    state_one_hot[3] = (grid == 3) # 유령
-    state_one_hot[4] = (grid == 4) # 코인
-    return state_one_hot.flatten()
-
-def save_summary_to_csv(results):
-    """10회 테스트 결과를 CSV로 저장"""
-    with open(RESULT_FILENAME, 'w', newline='') as f:
-        writer = csv.writer(f)
-        # 헤더 작성
-        writer.writerow(['Episode', 'Timestamp', 'Model_Type', 'Score', 'Steps', 'Wall_Hits', 'Coins'])
-
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        for res in results:
-            writer.writerow([
-                res['episode'],
-                timestamp,
-                MODEL_TYPE,
-                res['score'],
-                res['steps'],
-                res['wall_hits'],
-                res['coins']
-            ])
-
-    print(f"💾 [저장 완료] 상세 기록이 저장되었습니다: {RESULT_FILENAME}")
+# CNN용 상태 전처리 (Train과 동일)
+def get_one_hot_state(grid, pacman_pos, ghosts):
+    state = np.zeros((5, 20, 20), dtype=np.float32)
+    state[0] = (grid == 0)
+    state[1] = (grid == 1)
+    state[4] = (grid == 4)
+    pr, pc = pacman_pos
+    state[2][pr, pc] = 1.0
+    for gr, gc in ghosts:
+        state[3][gr, gc] = 1.0
+    return state
 
 def run_episode(env, agent, episode_idx):
-    """한 번의 에피소드를 실행하고 결과를 반환하는 함수"""
-    grid_state = env.reset()
-    state = get_one_hot_state(grid_state)
+    env.reset()
+    state = get_one_hot_state(env.grid, env.pacman_pos, env.ghosts)
     done = False
     total_reward = 0
     step = 0
-    final_wall_hits = 0
-    final_coins = 0
 
-    # 윈도우 제목에 현재 진행상황 표시
-    pygame.display.set_caption(f"{MODEL_TYPE} Test - Episode {episode_idx}/{NUM_TEST_EPISODES}")
+    pygame.display.set_caption(f"{MODEL_TYPE} Test - Ep {episode_idx}")
 
     while not done:
-        # 이벤트 처리 (강제 종료 방지)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 env.close()
                 exit()
 
         action = agent.get_action(state)
-        next_grid_state, reward, done, info = env.step(action)
-        state = get_one_hot_state(next_grid_state)
+        next_grid, reward, done, info = env.step(action)
+        state = get_one_hot_state(next_grid, env.pacman_pos, env.ghosts)
 
-        final_wall_hits = info['wall_hits']
-        final_coins = info['coins_eaten']
         total_reward += reward
         step += 1
 
+        # 렌더링 (너무 빠르면 time.sleep 주석 해제)
         env.render()
-        if RENDER_DELAY > 0:
-            time.sleep(RENDER_DELAY)
+        # time.sleep(0.01)
 
     return {
         'episode': episode_idx,
         'score': total_reward,
         'steps': step,
-        'wall_hits': final_wall_hits,
-        'coins': final_coins
+        'wall_hits': info['wall_hits'],
+        'coins': info['coins_eaten']
     }
 
-def run_test_batch():
+def main():
     env = PacmanEnv()
-    state_size = 20 * 20 * 5
     action_size = 4
+    agent = AgentClass(action_size)
 
-    # 1. 에이전트 생성
-    if MODEL_TYPE == "RANDOM":
-        agent = AgentClass(action_size)
-    else:
-        agent = AgentClass(state_size, action_size)
-
-    print(f"\n=== 🎮 {MODEL_TYPE} 모델 10회 연속 테스트 시작 ===")
-
-    # 2. 모델 로드 (1회만 수행)
+    # [수정됨] 모델 로드 로직 (RANDOM일 때는 건너뜀)
     if MODEL_TYPE != "RANDOM":
-        print(f"📂 모델 불러오는 중: {model_filename}")
+        print(f"Loading Model: {model_filename}")
         try:
-            agent.model.load_state_dict(torch.load(model_filename, map_location=torch.device('cpu')))
-            agent.epsilon = 0.0  # 탐험 끄기 (Greedy Action)
-            print(f">>> 로드 성공! 테스트를 시작합니다.")
+            # weights_only=True 추가 (경고 방지)
+            agent.model.load_state_dict(torch.load(model_filename, map_location='cpu', weights_only=True))
+            agent.epsilon = 0.0 # 탐험 끄기 (순수 실력 테스트)
+            print("✅ Model Loaded Successfully!")
         except FileNotFoundError:
-            print(f">>> 🚨 오류: '{model_filename}' 파일이 없습니다. 학습을 먼저 진행하세요.")
+            print(f"❌ Error: Model file not found at {model_filename}")
+            print("Please train the model first.")
             return
     else:
-        print(">>> 🎲 Random Agent 준비 완료.")
+        print("🎲 Random Agent Selected (No model to load)")
 
-    # 3. 10회 반복 실행
     history = []
+    print(f"\n--- Start Testing ({NUM_TEST_EPISODES} Episodes) ---")
 
     for i in range(1, NUM_TEST_EPISODES + 1):
-        print(f"\n▶ Episode {i}/{NUM_TEST_EPISODES} 진행 중...", end="\r")
-        result = run_episode(env, agent, i)
-        history.append(result)
+        res = run_episode(env, agent, i)
+        history.append(res)
+        print(f"Ep {i} | Score: {res['score']:.1f} | Wall: {res['wall_hits']} | Coins: {res['coins']}")
 
-        # 짧은 요약 출력
-        print(f"▶ Episode {i:02d} | Score: {result['score']:.1f} | Coins: {result['coins']} | Walls: {result['wall_hits']}")
-        time.sleep(0.5) # 에피소드 간 짧은 대기
-
-    env.close()
-
-    # 4. 결과 집계 및 출력
-    scores = [r['score'] for r in history]
-    steps = [r['steps'] for r in history]
-    walls = [r['wall_hits'] for r in history]
-    coins = [r['coins'] for r in history]
+    # --- 최종 결과 요약 출력 ---
+    scores = [h['score'] for h in history]
+    walls = [h['wall_hits'] for h in history]
+    coins = [h['coins'] for h in history]
+    steps = [h['steps'] for h in history]
 
     print("\n" + "="*50)
     print(f"   📊 [ {MODEL_TYPE} ] 최종 성적표 (총 {NUM_TEST_EPISODES}회)")
@@ -160,8 +149,89 @@ def run_test_batch():
     print(f"   🦶 평균 스텝 (Steps) : {np.mean(steps):.1f}")
     print("-" * 50)
 
-    # 5. CSV 저장
-    save_summary_to_csv(history)
+    # CSV 저장 (선택사항)
+    with open(RESULT_FILENAME, 'w', newline='') as f:
+         writer = csv.writer(f)
+         writer.writerow(['Episode', 'Score', 'Wall_Hits', 'Coins', 'Steps'])
+         for h in history:
+             writer.writerow([h['episode'], h['score'], h['wall_hits'], h['coins'], h['steps']])
+    print(f"📁 Log saved to {RESULT_FILENAME}")
 
 if __name__ == "__main__":
-    run_test_batch()
+    main()
+    from cnn_model_agent.cnn_dueling_agent import CNNDuelingAgent as AgentClass
+    model_filename = "../trained_pth/pacman_cnn_dueling.pth"
+elif MODEL_TYPE == "RANDOM":
+    from cnn_model_agent.random_agent import RandomAgent as AgentClass
+else:
+    raise ValueError(f"Unknown MODEL_TYPE: {MODEL_TYPE}")
+
+# CNN용 상태 전처리 (Train과 동일)
+def get_one_hot_state(grid, pacman_pos, ghosts):
+    state = np.zeros((5, 20, 20), dtype=np.float32)
+    state[0] = (grid == 0)
+    state[1] = (grid == 1)
+    state[4] = (grid == 4)
+    pr, pc = pacman_pos
+    state[2][pr, pc] = 1.0
+    for gr, gc in ghosts:
+        state[3][gr, gc] = 1.0
+    return state
+
+def run_episode(env, agent, episode_idx):
+    env.reset()
+    state = get_one_hot_state(env.grid, env.pacman_pos, env.ghosts)
+    done = False
+    total_reward = 0
+    step = 0
+
+    pygame.display.set_caption(f"{MODEL_TYPE} Test - Ep {episode_idx}")
+
+    while not done:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                env.close()
+                exit()
+
+        action = agent.get_action(state)
+        next_grid, reward, done, info = env.step(action)
+        state = get_one_hot_state(next_grid, env.pacman_pos, env.ghosts)
+
+        total_reward += reward
+        step += 1
+        env.render()
+        # time.sleep(0.01) # 너무 빠르면 주석 해제
+
+    return {
+        'episode': episode_idx,
+        'score': total_reward,
+        'steps': step,
+        'wall_hits': info['wall_hits'],
+        'coins': info['coins_eaten']
+    }
+
+def main():
+    env = PacmanEnv()
+    action_size = 4
+    agent = AgentClass(action_size)
+
+    print(f"Loading Model: {model_filename}")
+    try:
+        agent.model.load_state_dict(torch.load(model_filename, map_location='cpu'))
+        agent.epsilon = 0.0 # 탐험 끄기
+        print("Model Loaded Successfully!")
+    except FileNotFoundError:
+        print("Model file not found. Please train first.")
+        return
+
+    history = []
+    for i in range(1, NUM_TEST_EPISODES + 1):
+        res = run_episode(env, agent, i)
+        history.append(res)
+        print(f"Ep {i} | Score: {res['score']:.1f} | Wall: {res['wall_hits']}")
+
+    # 결과 집계 출력 (생략, 기존과 동일)
+    # ...
+
+if __name__ == "__main__":
+    main()
