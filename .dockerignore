@@ -1,0 +1,22 @@
+# 버전 관리 시스템
+.git
+.gitignore
+
+# 파이썬 캐시 및 가상환경 (전송 시간 단축의 핵심)
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+venv/
+env/
+.idea/
+.vscode/
+
+# [중요] 결과물 폴더 무시
+# (이미지에 포함시키지 않고, 실행 시 볼륨 마운트로 연결할 것임)
+trained_pth/
+train_result/
+test_result/
+
+# 시스템 파일
+.DS_Store
