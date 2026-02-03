@@ -64,10 +64,14 @@ class PacmanEnv:
         self.reset()
 
     def generate_random_map(self):
-        """DFS 알고리즘으로 매번 새로운 미로 생성 (완전 연결 보장)"""
-        grid = np.ones((GRID_SIZE, GRID_SIZE), dtype=int) # 일단 다 벽으로 채움
+        """
+        DFS로 미로를 만들고, 막다른 길(Dead End)을 모두 제거하여
+        순환 구조(Braid Maze)를 만듭니다.
+        """
+        # 1. 일단 모두 벽으로 채움
+        grid = np.ones((GRID_SIZE, GRID_SIZE), dtype=int)
 
-        # (1,1)에서 시작
+        # 2. DFS로 기본 미로 생성 (이 상태는 막다른 길이 아주 많음)
         r, c = 1, 1
         grid[r, c] = EMPTY
         stack = [(r, c)]
@@ -85,27 +89,52 @@ class PacmanEnv:
 
             if neighbors:
                 idx, nr, nc = random.choice(neighbors)
-                # 현재 위치와 다음 위치 사이의 벽을 뚫음
                 mr, mc = r + DX[idx], c + DY[idx]
-                grid[mr, mc] = EMPTY
-                grid[nr, nc] = EMPTY
+                grid[mr, mc] = EMPTY # 사이 벽 뚫기
+                grid[nr, nc] = EMPTY # 다음 칸 뚫기
                 stack.append((nr, nc))
             else:
                 stack.pop()
 
-        # [옵션] 너무 꽉 막힌 미로가 되지 않게 벽을 무작위로 10% 정도 더 뚫어줌 (순환로 생성)
-        # 이 부분이 있어야 팩맨이 갇히지 않고 도망갈 구멍이 생깁니다.
-        for _ in range(int(GRID_SIZE * GRID_SIZE * 0.1)):
-            rr = random.randint(1, GRID_SIZE-2)
-            rc = random.randint(1, GRID_SIZE-2)
-            if grid[rr, rc] == WALL:
-                # 상하좌우 중 빈 공간이 2개 이상이면 뚫어도 됨
-                empty_cnt = 0
+        # 3. [핵심] 막다른 길(Dead End) 제거 로직
+        # 막다른 길이 하나도 없을 때까지 반복해서 벽을 뚫습니다.
+        while True:
+            dead_ends = []
+
+            # (1,1)부터 (18,18)까지 내부 탐색
+            for r in range(1, GRID_SIZE-1):
+                for c in range(1, GRID_SIZE-1):
+                    if grid[r, c] == EMPTY:
+                        # 상하좌우 중 '길(EMPTY)'인 곳의 개수를 셈
+                        path_count = 0
+                        for i in range(4):
+                            nr, nc = r + DX[i], c + DY[i]
+                            if grid[nr, nc] == EMPTY:
+                                path_count += 1
+
+                        # 연결된 길이 1개뿐이면 막다른 길임
+                        if path_count <= 1:
+                            dead_ends.append((r, c))
+
+            # 막다른 길이 없으면 종료
+            if not dead_ends:
+                break
+
+            # 발견된 막다른 길들의 주변 벽을 뚫어버림
+            for r, c in dead_ends:
+                # 4방향 중 '벽(WALL)'이면서 '맵 내부'인 곳을 찾음
+                candidates = []
                 for i in range(4):
-                    if grid[rr+DX[i], rc+DY[i]] == EMPTY:
-                        empty_cnt += 1
-                if empty_cnt >= 2:
-                    grid[rr, rc] = EMPTY
+                    nr, nc = r + DX[i], c + DY[i]
+                    # 테두리(0 또는 19)는 절대 뚫으면 안 됨
+                    if 1 <= nr < GRID_SIZE-1 and 1 <= nc < GRID_SIZE-1:
+                        if grid[nr, nc] == WALL:
+                            candidates.append((nr, nc))
+
+                # 뚫을 수 있는 벽이 있다면 랜덤으로 하나 뚫어서 길을 연결
+                if candidates:
+                    br, bc = random.choice(candidates)
+                    grid[br, bc] = EMPTY
 
         return grid
 
