@@ -181,7 +181,7 @@ class PacmanEnv:
         self.current_step += 1
 
         # [중요] 페널티 설정 (-0.1: 움직여라!)
-        reward = -0.1
+        reward = -1
         done = False
 
         r, c = self.pacman_pos
@@ -189,7 +189,7 @@ class PacmanEnv:
 
         # 벽 충돌 체크
         if not (0 <= nr < GRID_SIZE and 0 <= nc < GRID_SIZE) or self.grid[nr, nc] == WALL:
-            reward = -5.0
+            reward = -20
             self.wall_hits += 1
         else:
             self.pacman_pos = [nr, nc]
