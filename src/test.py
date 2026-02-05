@@ -32,7 +32,7 @@ elif MODEL_TYPE == "CNN_DDQN":
     from cnn_model_agent.cnn_ddqn_agent import CNNDDQNAgent as AgentClass
 
     # [수정] 재학습된 모델이 있으면 우선 사용하되, 없으면 기본 모델 사용
-    retrained_path = "../trained_pth/pacman_cnn_ddqn_retrained.pth"
+    retrained_path = "../trained_pth/pacman_cnn_ddqn_safe.pth"
     base_path = "../trained_pth/pacman_cnn_ddqn.pth"
 
     if os.path.exists(retrained_path):
